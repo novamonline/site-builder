@@ -46,13 +46,10 @@ function resetInstallFiles($backup = false)
     foreach($paths as $path){
         $path = realpath($path);
         if($path == __FILE__) continue;
-        if($path == realpath('.git')) continue;
-        if($path == realpath('.bak')) continue;
-        if($path == realpath('installer')) continue;
-        if($path == realpath("composer.json")) continue;
+        if($path == realpath('./bak')) continue;
+        if($path == realpath("./composer.json")) continue;
         echo " -- Found '$path', removing from root...\r\n";
-        shell_exec("cp -rf $path $folder");
-        shell_exec("rm -rf $path");
+        shell_exec("mv $path $folder");
     }
 }
 
