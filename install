@@ -3,33 +3,19 @@
 
 function InstallFramework($framework, $installer)
 {
-    echo "Checking for existing $framework...\r\n";  
-    
+    echo "Checking for existing $framework...\r\n";      
 
     echo "..Removing any previously installed packages...\n";
-    !file_exists(".bak") || shell_exec("rm -rf .bak");
+
+    !file_exists(".bak") || shell_exec("rm -rf .bak");  
     mkdir(".bak");
-    foreach(glob(__DIR__."/*") as $path){
-        $path = realpath($path);
-        if($path == __FILE__) continue;
-        if($path == realpath('./bak')) continue;
-        if($path == realpath("./composer.json")) continue;
-        print_r(" - Deleting $path...\r\n");
-        shell_exec("mv $path .bak/");
-    }
-    shell_exec("mv .* .bak/ 2> /dev/null");
+    resetInstallFiles(true);
     
     echo "..Installing $framework...\n";
     echo "..Running 'composer require $framework $installer'\r\n";
     shell_exec("composer require $framework $installer");
 
-    foreach(glob(__DIR__."/*") as $path){
-        $path = realpath($path);
-        if($path == __FILE__) continue;
-        if($path == realpath('./bak')) continue;
-        if($path == realpath("./composer.json")) continue;
-    }
-    shell_exec("mv .* ./server 2> /dev/null");
+    resetInstallFiles();
 
     shell_exec("mv vendor/$framework/ ./server ");
         echo "..Creating public code...\n";
@@ -38,24 +24,41 @@ function InstallFramework($framework, $installer)
     if(stripos($framework, "laravel") !== false){
         echo "..Creating client code...\n";
         !file_exists("server/resources") || shell_exec("mv server/resources/ ./client ");
-
     }
-    elseif(stripos($framework, "silverstripe") !== false){       
+    elseif(stripos($framework, "silverstripe") !== false){   
 
         echo "..Creating client code...\n";
-        !file_exists("app") || shell_exec("mv app/ ./server");
-        file_exists("client") || shell_exec("mdkdir client");
-        !file_exists("themes") || shell_exec("mv themes/ ./client");
-        
+        !file_exists("app") || shell_exec("mv ./app/ ./server");
+        file_exists("client") || shell_exec("mkdir client");
+        !file_exists("themes") || shell_exec("mv themes/ ./client");        
     }
     echo "..Cleaning up installation files..\n";
-    shell_exec("rm -rf vendor/$framework/{*.,.,}*");
-
+    shell_exec("composer remove $framework");
     
+}
+
+function resetInstallFiles($backup = false)
+{
+    $folder = realpath($backup !== false? "bak": "server");
+
+    $paths = array_merge(glob(__DIR__."/*"), glob(__DIR__."/.*"));
+
+    foreach($paths as $path){
+        $path = realpath($path);
+        if($path == __FILE__) continue;
+        if($path == realpath('./bak')) continue;
+        if($path == realpath("./composer.json")) continue;
+        echo " -- Found '$path', removing from root...\r\n";
+        shell_exec("mv $path $folder");
+    }
 }
 
 function ReplaceContent($page)
 {
+    if(file_exists($page)){
+        print "-- File $page doesn't exists!...\r\n";
+        return;
+    }
     file_put_contents($page, str_replace(
         ["/bootstrap/", "/server/bootstrap/"],
         ["/vendor/", "/../vendor/"],
@@ -106,7 +109,7 @@ if(!$INSTALLED){
     ReplaceContent(__DIR__ . "/public/index.php");
     ReplaceContent(__DIR__ . "/server/artisan");
     shell_exec('mv ./server/package.json ./');
-    echo "Do you want to remove the backup files? Type 'Y' for yes or enter for no.\r\n";
+    echo "Do you want to remove the backup files? Type 'Y' for yes or enter for no: ";
     $handle = fopen ("php://stdin","r");
     $rmBak = trim(fgets($handle));
     fclose($handle);
