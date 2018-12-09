@@ -1,4 +1,4 @@
 *
-install
-composer.json
+!install
+!composer.json
 !.gitignore
