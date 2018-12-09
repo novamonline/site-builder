@@ -1,0 +1,121 @@
+#!/bin/env php 
+<?php 
+
+function InstallFramework($framework, $installer)
+{
+    echo "Checking for existing $framework...\r\n";      
+
+    echo "..Removing any previously installed packages...\n";
+
+    !file_exists(".bak") || shell_exec("rm -rf .bak");  
+    mkdir(".bak");
+    resetInstallFiles(true);
+    
+    echo "..Installing $framework...\n";
+    echo "..Running 'composer require $framework $installer'\r\n";
+    shell_exec("composer require $framework $installer");
+
+    resetInstallFiles();
+
+    shell_exec("mv vendor/$framework/ ./server ");
+        echo "..Creating public code...\n";
+        !file_exists("server/public") || shell_exec("mv server/public ./ ");
+
+    if(stripos($framework, "laravel") !== false){
+        echo "..Creating client code...\n";
+        !file_exists("server/resources") || shell_exec("mv server/resources/ ./client ");
+    }
+    elseif(stripos($framework, "silverstripe") !== false){   
+
+        echo "..Creating client code...\n";
+        !file_exists("app") || shell_exec("mv ./app/ ./server");
+        file_exists("client") || shell_exec("mkdir client");
+        !file_exists("themes") || shell_exec("mv themes/ ./client");        
+    }
+    echo "..Cleaning up installation files..\n";
+    shell_exec("composer remove $framework");
+    
+}
+
+function resetInstallFiles($backup = false)
+{
+    $folder = realpath($backup !== false? "bak": "server");
+
+    $paths = array_merge(glob(__DIR__."/*"), glob(__DIR__."/.*"));
+
+    foreach($paths as $path){
+        $path = realpath($path);
+        if($path == __FILE__) continue;
+        if($path == realpath('.git')) continue;
+        if($path == realpath('.bak')) continue;
+        if($path == realpath('installer')) continue;
+        if($path == realpath("composer.json")) continue;
+        echo " -- Found '$path', removing from root...\r\n";
+        shell_exec("cp -rf $path $folder");
+        shell_exec("rm -rf $path");
+    }
+}
+
+function ReplaceContent($page)
+{
+    if(file_exists($page)){
+        print "-- File $page doesn't exists!...\r\n";
+        return;
+    }
+    file_put_contents($page, str_replace(
+        ["/bootstrap/", "/server/bootstrap/"],
+        ["/vendor/", "/../vendor/"],
+        file_get_contents($page)
+    ));    
+}
+
+function InitiateWebsite($port)
+{
+    shell_exec("composer dump-autoload");
+    !file_exists('.env.example') || shell_exec("cp server/.env.example server/.env");
+    !file_exists('server/artisan') || shell_exec("cd server/ && php artisan key:generate");
+    
+    echo "Opening up " . ($site = "127.0.0.1:$port") . "\r\n...";
+    shell_exec("start \"\" http://$site");
+    shell_exec("php -S $site -t public");
+    
+}
+
+$frameworks[1]['laravel'] = 'laravel/laravel';
+$installers[1] = "fideloper/proxy laravel/framework laravel/tinker";
+$frameworks[2]['silverstripe'] = 'silverstripe/installer';
+$installers[2] = "silverstripe/recipe-plugin silverstripe/recipe-cms silverstripe-themes/simple";
+echo "Please select the framework you want to install from this list:\r\n";
+$framework = [];
+foreach ($frameworks as $i => $fw) {
+    echo "[".($i)."] ".(key($fw)) . "\r\n";
+    $framework[$i] = current($fw);
+}
+echo "Enter the for the framework above: ";
+$handle = fopen ("php://stdin","r");
+$frame = (int)trim(fgets($handle));
+fclose($handle);
+
+
+// $INSTALLED = file_exists("server/app");
+if($INSTALLED = file_exists("server/app")){
+    echo "The system is already installed, do you wnat to reinstall?\r\n";
+    echo "Hit enter to abort or type, Y or Yes (case-insensitive) to re-install: ";
+    $handle = fopen("php://stdin", "r");
+    $yesno = strtolower(trim(fgets($handle)));    
+    fclose($handle);
+    if($yesno == 'y' || $yesno == 'yes') $INSTALLED = false;
+    else echo "\r\nAborting!\r\n\n";
+}
+if(!$INSTALLED){
+    InstallFramework($framework[$frame], $installers[$frame]);
+    ReplaceContent(__DIR__ . "/public/index.php");
+    ReplaceContent(__DIR__ . "/server/artisan");
+    shell_exec('mv ./server/package.json ./');
+    echo "Do you want to remove the backup files? Type 'Y' for yes or enter for no: ";
+    $handle = fopen ("php://stdin","r");
+    $rmBak = trim(fgets($handle));
+    fclose($handle);
+    $rmBak == "" || shell_exec('rm -rf .bak');
+    InitiateWebsite(mt_rand(1000, 9999));
+}
